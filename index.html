@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>全球经济繁荣与恐慌指数仪表盘 · Global Economy Dashboard</title>
+<meta name="description" content="基于世界银行、IMF、CBOE 官方公开数据构建的全球经济繁荣指数(EPI)与宏观恐慌指数(MFI)可视化仪表盘">
+<link rel="stylesheet" href="assets/style.css">
+<!-- 腾讯地图合规接入：密钥代理模式，前端不暴露任何 key（SDK 加载前必须完成配置） -->
+<script type="text/javascript">
+  window._TMapSecurityConfig = {
+    serviceHost: 'http://127.0.0.1:__WB_HTTP_PORT__/_TMapService/_wbt/__WB_TMAP_SECRET__',
+  };
+</script>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="wrap topbar-inner">
+    <div class="brand">
+      <div class="brand-mark">GE</div>
+      <div class="brand-text">
+        <h1>全球经济繁荣与恐慌指数仪表盘</h1>
+        <p>Global Economic Prosperity &amp; Fear Index Dashboard</p>
+      </div>
+    </div>
+    <div class="topbar-meta">
+      <div class="src-badges">
+        <span class="badge" title="World Bank Open Data API">世界银行</span>
+        <span class="badge" title="IMF WEO / SDMX API">IMF</span>
+        <span class="badge" title="CBOE VIX 官方历史">CBOE VIX</span>
+      </div>
+      <div class="stamp">数据快照：<b id="stamp-time">—</b></div>
+    </div>
+  </div>
+</header>
+
+<nav class="subnav">
+  <div class="wrap">
+    <a href="#overview">全球概览</a>
+    <a href="#worldmap">世界地图</a>
+    <a href="#fear">恐慌指数</a>
+    <a href="#prosperity">繁荣指数排行</a>
+    <a href="#detail">国家详情</a>
+    <a href="#macrofear">宏观恐慌排行</a>
+    <a href="#trends">长期趋势</a>
+    <a href="#scatter">结构分布</a>
+    <a href="#method">方法论与数据源</a>
+  </div>
+</nav>
+
+<main class="wrap">
+
+  <!-- ============ 全球概览 ============ -->
+  <section id="overview" class="sec">
+    <div class="sec-head">
+      <h2>全球概览</h2>
+      <p class="sec-sub" id="overview-sub">—</p>
+    </div>
+    <div class="view-switch" id="view-switch"></div>
+    <div class="kpi-grid" id="kpi-grid"></div>
+    <p class="hint" id="view-note"></p>
+  </section>
+
+  <!-- ============ 世界地图 ============ -->
+  <section id="worldmap" class="sec">
+    <div class="sec-head">
+      <h2>世界地图 <span class="tag tag-blue">World Map</span></h2>
+      <p class="sec-sub">底图为腾讯地图（合规地图服务商）· 气泡大小代表所选规模指标，颜色代表所选指数 · 点击气泡联动国家详情</p>
+    </div>
+    <div class="card">
+      <div class="card-head">
+        <h3 id="map-title">全球分布</h3>
+        <div class="tools">
+          <select id="map-color" title="气泡颜色">
+            <option value="epi">颜色：经济繁荣指数 EPI</option>
+            <option value="mfi">颜色：宏观恐慌指数 MFI</option>
+            <option value="growth">颜色：近 5 年实际增速</option>
+          </select>
+          <select id="map-size" title="气泡大小">
+            <option value="pop">大小：人口</option>
+            <option value="gdp">大小：GDP 总量</option>
+          </select>
+          <button class="btn" id="map-replay">重播动画</button>
+        </div>
+      </div>
+      <div class="map-wrap">
+        <div id="map-container"></div>
+        <div class="map-legend" id="map-legend"></div>
+      </div>
+      <div id="map-notice" class="note">
+        正在加载腾讯地图…
+      </div>
+      <div class="map-key-row">
+        <span class="src">若在本页之外独立打开（file:// 或自建服务），需自行申请腾讯位置服务密钥：</span>
+        <input type="text" id="tmap-key" placeholder="在此粘贴腾讯位置服务 key，仅存于本机 localStorage">
+        <button class="btn" id="tmap-key-save">保存并重载地图</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 恐慌指数 ============ -->
+  <section id="fear" class="sec">
+    <div class="sec-head">
+      <h2>恐慌指数 <span class="tag tag-red">Fear Gauge</span></h2>
+      <p class="sec-sub">市场恐慌（VIX，CBOE 官方日频数据）＋ 宏观恐慌（MFI，本模型计算）＋ 合成全球恐慌指数（GFI）</p>
+    </div>
+
+    <div class="fear-grid">
+      <div class="card vix-card">
+        <div class="card-head">
+          <h3>VIX 市场恐慌指数</h3>
+          <span class="src">CBOE 官方 · <span id="vix-date">—</span></span>
+        </div>
+        <div class="vix-main">
+          <div class="vix-num" id="vix-value">—</div>
+          <div class="vix-state" id="vix-state">—</div>
+        </div>
+        <div class="gauge" id="vix-gauge"></div>
+        <div class="vix-stats" id="vix-stats"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <h3>VIX 近一年走势</h3>
+          <span class="src">中位数参考线：<span id="vix-median">—</span></span>
+        </div>
+        <div id="vix-chart" class="chart-box"></div>
+      </div>
+    </div>
+
+    <div class="fear-grid fear-grid-3">
+      <div class="card">
+        <div class="card-head"><h3>综合恐慌指数 GFI</h3><span class="src">本模型合成</span></div>
+        <div class="gfi-box">
+          <div class="gfi-num" id="gfi-value">—</div>
+          <div class="gfi-formula">GFI = 0.6 × VIX历史分位 + 0.4 × 全球宏观恐慌(MFI, GDP加权)</div>
+          <div class="gfi-bars" id="gfi-bars"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>样本宏观恐慌 MFI</h3><span class="src"><span id="mfi-w-note">—</span></span></div>
+        <div id="mfi-global-stats" class="stat-list"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>VIX 历史极值日</h3><span class="src">1990 年至今</span></div>
+        <div id="vix-peaks" class="peak-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 繁荣指数排行 ============ -->
+  <section id="prosperity" class="sec">
+    <div class="sec-head">
+      <h2>经济繁荣指数排行 <span class="tag tag-blue">EPI</span></h2>
+      <p class="sec-sub">EPI = 富裕水平28% + 人力资本16% + 增长动能16% + 就业质量12% + 物价稳定12% + 外部韧性10% + 人口活力6%</p>
+    </div>
+
+    <div class="rank-grid" id="rank-grid"></div>
+
+    <div class="card table-card">
+      <div class="card-head">
+        <h3>完整数据表（<span id="table-count">—</span> 个经济体）</h3>
+        <div class="tools">
+          <input type="search" id="q" placeholder="搜索国家 / 地区…">
+          <select id="f-region"><option value="">全部地区</option></select>
+          <select id="f-income"><option value="">全部收入组</option></select>
+          <button class="btn" id="btn-csv">导出 CSV</button>
+        </div>
+      </div>
+      <div class="table-scroll">
+        <table class="data-table" id="main-table">
+          <thead>
+            <tr>
+              <th data-sort="gdp_rank" class="num" id="th-gdp-rank" title="按经济体量（GDP）的排名，不随视图切换改变">GDP#</th>
+              <th data-sort="epi_rank" class="num sort-desc" id="th-epi-rank" title="按繁荣指数 EPI 的排名，不随视图切换改变">EPI#</th>
+              <th data-sort="name">国家 / 地区</th>
+              <th data-sort="region">地区</th>
+              <th data-sort="epi" class="num sort-desc">EPI 繁荣</th>
+              <th data-sort="mfi" class="num">MFI 恐慌</th>
+              <th data-sort="gdp" class="num">GDP(万亿美元)</th>
+              <th data-sort="gdp_pc_ppp" class="num">人均GDP(PPP)</th>
+              <th data-sort="growth" class="num">近5年增速%</th>
+              <th data-sort="infl" class="num">通胀%</th>
+              <th data-sort="unemp" class="num">失业%</th>
+              <th data-sort="debt" class="num">政府债务/GDP%</th>
+              <th data-sort="pop" class="num">人口(百万)</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+      <p class="hint">点击任意行查看该国完整指标拆解 · 点击表头排序</p>
+    </div>
+  </section>
+
+  <!-- ============ 国家详情 ============ -->
+  <section id="detail" class="sec">
+    <div class="sec-head">
+      <h2>国家详情 <span class="tag tag-gray">Country Deep Dive</span></h2>
+      <p class="sec-sub" id="detail-sub">在上方表格点击任意国家，或在此选择</p>
+    </div>
+    <div class="card">
+      <div class="detail-head">
+        <select id="country-select"></select>
+        <button class="btn btn-primary" id="btn-live">实时校验数据源</button>
+        <span class="src" id="live-status"></span>
+      </div>
+      <div id="detail-body"></div>
+    </div>
+  </section>
+
+  <!-- ============ 宏观恐慌排行 ============ -->
+  <section id="macrofear" class="sec">
+    <div class="sec-head">
+      <h2>宏观恐慌指数排行 <span class="tag tag-red">MFI</span></h2>
+      <p class="sec-sub">MFI = 通胀压力22% + 增长失速20% + 就业压力16% + 债务压力14% + 外部脆弱14% + 宏观波动14%（分数越高越危险）</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3 id="mfi-top-title">宏观基本面压力最高 20 国</h3><span class="src">红色越深，宏观风险越高</span></div>
+      <div class="bar-list" id="mfi-top"></div>
+    </div>
+  </section>
+
+  <!-- ============ 长期趋势 ============ -->
+  <section id="trends" class="sec">
+    <div class="sec-head">
+      <h2>全球长期趋势</h2>
+      <p class="sec-sub">世界银行全球聚合序列（WLD）：经济增长、通胀与人口</p>
+    </div>
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>全球实际 GDP 增速 vs 通胀率</h3><span class="src">1980—2025 · %</span></div>
+        <div id="chart-growth" class="chart-box"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>全球人口总量</h3><span class="src">1960—2025 · 十亿人</span></div>
+        <div id="chart-pop" class="chart-box"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ 散点分布 ============ -->
+  <section id="scatter" class="sec">
+    <div class="sec-head">
+      <h2>收入水平与繁荣指数分布</h2>
+      <p class="sec-sub">横轴人均 GDP（PPP，对数轴）· 纵轴 EPI · 气泡大小代表人口 · 颜色代表地区</p>
+    </div>
+    <div class="card">
+      <div class="card-head"><h3 id="scatter-title">结构分布</h3><span class="src" id="scatter-legend"></span></div>
+      <div id="chart-scatter" class="chart-box chart-box-lg"></div>
+    </div>
+  </section>
+
+  <!-- ============ 方法论 ============ -->
+  <section id="method" class="sec">
+    <div class="sec-head">
+      <h2>方法论与数据源</h2>
+      <p class="sec-sub">所有数字均可回溯到官方原始数据，无人工估算值</p>
+    </div>
+
+    <div class="two-col">
+      <div class="card">
+        <div class="card-head"><h3>经济繁荣指数 EPI 权重</h3></div>
+        <div id="epi-weights" class="weight-list"></div>
+        <div class="note" id="norm-note"></div>
+      </div>
+      <div class="card">
+        <div class="card-head"><h3>宏观恐慌指数 MFI 权重</h3></div>
+        <div id="mfi-weights" class="weight-list"></div>
+        <div class="note">
+          <b>缺失值处理：</b>某维度数据缺失时不计零分，而是将其权重<b>按比例重新分配</b>给其余维度，
+          避免“数据缺失”被误读为“表现极差”。每项指数的实际权重构成可在国家详情中查看。
+        </div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>样本口径</h3></div>
+      <div class="note" id="sample-note"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>原始数据指标清单（可逐个回溯到世界银行 API）</h3></div>
+      <div class="table-scroll">
+        <table class="data-table" id="indicator-table">
+          <thead><tr><th>World Bank 指标代码</th><th>指标名称</th><th>单位</th><th>在模型中的用途</th></tr></thead>
+          <tbody id="indicator-body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-head"><h3>数据源与可靠性说明</h3></div>
+      <div id="source-list" class="source-list"></div>
+      <div class="note note-warn">
+        <b>局限与免责：</b>
+        ① 各国统计口径与数据年份不一致（多为 2024–2025 年最新可得值），跨国比较存在时滞差异；
+        ② VIX 衡量的是美股市场对<b>未来 30 天</b>波动率的预期，不等于全球经济本身的风险；
+        ③ EPI / MFI / GFI 为本模型构建的综合指数，属于研究性指标，非官方发布指数，不构成任何投资建议；
+        ④ 世界银行部分指标对最不发达国家存在缺失，样本已通过“人口 ≥ 100 万”过滤，未覆盖微型经济体。
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p>数据来源：World Bank Open Data API · IMF DataMapper API · CBOE VIX 官方历史数据。指数模型与可视化为本页自建。</p>
+    <p class="muted">快照生成时间：<span id="foot-time">—</span> · 覆盖 <span id="foot-count">—</span> 个经济体</p>
+  </div>
+</footer>
+
+<script src="data/data.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
