@@ -156,6 +156,15 @@ const missing = G20.filter((c) => !D.countries.some((r) => r.iso3 === c));
 if (missing.length) { console.error(`❌ G20 成员缺失: ${missing.join(',')}`); bad++; }
 else console.log('✅ G20 19 个成员国全部在样本内');
 
+/* --- 无密钥降级视图（分组气泡矩阵，不依赖腾讯地图） --- */
+const fbHtml = String((store['#map-container'] || {}).innerHTML || '');
+const fbBubbles = (fbHtml.match(/class="bf-b"/g) || []).length;
+const fbRegs = (fbHtml.match(/class="bf-reg"/g) || []).length;
+console.log(`\n[降级视图] 分组气泡 ${fbBubbles} 个 · 地区分组 ${fbRegs} 个`);
+if (fbBubbles !== 19) { console.error(`❌ G20 视图降级气泡应为 19 个，实际 ${fbBubbles}`); bad++; }
+else if (fbRegs < 2) { console.error('❌ 地区分组数量异常'); bad++; }
+else console.log('✅ 无密钥时自动渲染分组气泡视图');
+
 /* --- 地图数据完整性 --- */
 const withGeo = D.countries.filter((r) => typeof r.lat === 'number' && typeof r.lon === 'number').length;
 console.log(`\n地图定位数据：${withGeo} / ${D.countries.length} 个经济体含经纬度`);

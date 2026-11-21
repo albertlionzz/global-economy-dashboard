@@ -693,7 +693,7 @@
     MAP.geos = geos;
     renderMapLegend();
     $('#map-title').textContent = viewMeta().n + ' · ' + geos.length + ' 个经济体';
-    if (!MAP.ready || !window.TMap) return; // 底图未就绪时先备好数据与图例
+    if (!MAP.ready || !window.TMap) { renderBubbleFallback(); return; } // 无底图时降级为分组气泡矩阵
     var TMap = window.TMap;
     var styles = {};
     geos.forEach(function (g) {
@@ -734,6 +734,63 @@
     }
   }
 
+  /* 地图不可用时的降级视图：按地区分组的气泡矩阵。
+     刻意不含任何经纬度/国界渲染（纯分组布局），因此不涉及地图合规要求，
+     访客无需自备腾讯地图密钥也能看到「规模 + 指数」的分布全貌。 */
+  function renderBubbleFallback() {
+    var box = $('#map-container');
+    if (!box) return;
+    var cKey = $('#map-color').value || 'epi';
+    var sKey = $('#map-size').value || 'pop';
+    var rows = viewRows().filter(function (r) { return isNum(r[cKey]) && isNum(r[sKey]) && r[sKey] > 0; });
+    if (!rows.length) { box.innerHTML = '<div class="bf-empty">当前视图无可用数据</div>'; return; }
+    var maxV = Math.max.apply(null, rows.map(function (r) { return r[sKey]; }).concat([1]));
+    var byRegion = {}, order = [];
+    rows.forEach(function (r) {
+      var rg = r.region || '未分类';
+      if (!byRegion[rg]) { byRegion[rg] = []; order.push(rg); }
+      byRegion[rg].push(r);
+    });
+    order.sort(function (a, b) {
+      var sa = byRegion[a].reduce(function (s, r) { return s + r[sKey]; }, 0);
+      var sb = byRegion[b].reduce(function (s, r) { return s + r[sKey]; }, 0);
+      return sb - sa;
+    });
+    var valTxt = function (r) {
+      return cKey === 'epi' ? 'EPI ' + f1(r.epi)
+        : cKey === 'mfi' ? 'MFI ' + f1(r.mfi)
+          : '增速 ' + f1(r.growth) + '%';
+    };
+    var out = ['<div class="bf-wrap">'];
+    order.forEach(function (rg) {
+      var list = byRegion[rg].slice().sort(function (a, b) { return b[sKey] - a[sKey]; });
+      out.push('<div class="bf-reg"><div class="bf-reg-t">' + esc(rg) +
+        '<span class="bf-reg-n">' + list.length + '</span></div><div class="bf-bubbles">');
+      list.forEach(function (r) {
+        var px = Math.round(16 + 42 * Math.sqrt(r[sKey] / maxV));
+        var tip = r.name + ' · ' + valTxt(r) + ' · GDP ' + tril(r.gdp) + ' 万亿';
+        out.push('<button type="button" class="bf-b" data-iso="' + r.iso3 + '" title="' + esc(tip) + '"' +
+          ' style="width:' + px + 'px;height:' + px + 'px;background:' + scaleColor(cKey, r[cKey]) +
+          ';font-size:' + (px >= 36 ? 10 : 0) + 'px">' + (px >= 36 ? esc(r.iso3) : '') + '</button>');
+      });
+      out.push('</div></div>');
+    });
+    out.push('</div>');
+    box.innerHTML = out.join('');
+  }
+
+  if (document.querySelector('#map-container')) {
+    document.querySelector('#map-container').addEventListener('click', function (ev) {
+      var b = ev.target && ev.target.closest ? ev.target.closest('.bf-b') : null;
+      if (!b) return;
+      var iso = b.getAttribute('data-iso');
+      if (!iso) return;
+      selectCountry(iso);
+      var d = document.getElementById('detail');
+      if (d) d.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }
+
   function loadTMap(cb) {
     if (window.TMap) { cb(); return; }
     var key = '';
@@ -755,8 +812,10 @@
     var notice = $('#map-notice');
     loadTMap(function (err) {
       if (err || !window.TMap) {
-        notice.innerHTML = '<b>地图未能加载。</b>腾讯地图 SDK 请求失败（请检查网络）。' +
-          '若在本页之外独立打开，请在下方填入你自己的腾讯位置服务密钥。';
+        notice.innerHTML = '<b>已切换为「分组气泡」视图。</b>腾讯地图底图需要密钥（密钥与账号绑定、无法公共共享）。' +
+          '下方气泡按地区分组、面积代表规模、颜色代表指数，数据与地图模式完全一致。' +
+          '如需地理底图，请在页面底部填入你自己的腾讯位置服务密钥（个人开发者可免费申请，日额度 1 万次）。';
+        renderBubbleFallback();
         return;
       }
       try {
